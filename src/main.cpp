@@ -1,80 +1,48 @@
-// Разработанная библиотека-шаблон
 #include <SmartThing.h>
-// Библиотека для обновления по беспроводной сети
-#include <ArduinoOTA.h>
-// Библиотека для работы с датчиком давления
-#include <Adafruit_BMP280.h>
-// Библиотека для работы с датчиком температуры и влажности
-#include <AHT10.h>
+#include <DHT.h>
+
+#define DHTTYPE DHT11  
+
+DHT dht(D4, DHTTYPE);
 
 void addSensors();
 
-// Датчик давления
-Adafruit_BMP280 bmp;
-// Датчик температуры и влажности
-AHT10 aht(AHT10_ADDRESS_0X38, AHT20_SENSOR);
+long filterNan(float value) {
+  if (isnan(value)) {
+    LOGGER.info("main", "Nan value");
+    return 0;
+  }
 
-// Настройка перед запуском
+  return value;
+}
+
 void setup() {
-  // Добавление сенсоров
+  dht.begin();
+
   addSensors();
 
-  // Инициализация бибилотеки с указанием типа устройства
   if (SmartThing.init("meteo_station")) {
     LOGGER.info("main", "SmartThing successfully initialized");
   } else {
     LOGGER.error("main", "Failed to init SmartThing!");
   }
-  
-  // Проверка наличия подключения к беспроводной сети
-  // и запуск запуск библиотеки для получения
-  // обновлений по беспроводной сети
-  if (SmartThing.wifiConnected()) {
-    ArduinoOTA.begin();
-  }
 
-  // Запуск датчиков
-  if (bmp.begin()) {
-    bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
-                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
-                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
-                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
-                  Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
-    LOGGER.info("main", "Bmp sensor initialization finished!");
-  } else {
-    LOGGER.error("main", "Bmp sensor initialization error!");
+  if (!dht.read()) {
+    LOGGER.error("main", "Failed to read data from sensor!");
   }
-
-  if (aht.begin()) {
-    LOGGER.info("main", "Aht sensor initialization finished!");
-  } else {
-    LOGGER.error("main", "Aht sensor initialization error!");
-  }
-
-  LOGGER.info("main", "Setup finished");
 }
 
-// Метод, который работает бесконечно в цикле
 void loop() {
-  if (SmartThing.wifiConnected()) {
-    // Получение входящих подключений для обновления прошивки
-    ArduinoOTA.handle();
-  }
+  SmartThing.loop();
   delay(250);
+  dht.read();
 }
 
 void addSensors() {
-  // Добавление различных сенсоров при помощи разработанной библиотеки
-  // // Показатель температуры
-  SensorsManager.addSensor("temperature", []() {
-    return aht.readTemperature(AHT10_FORCE_READ_DATA);
+  SensorsManager.add("temperature", []() {
+    return filterNan(dht.readTemperature());
   });
-  // // Показатель влажности
-  SensorsManager.addSensor("humidity", []() {
-    return aht.readHumidity(AHT10_FORCE_READ_DATA);
-  });
-  // Показатель давления
-  SensorsManager.addSensor("pressure", []() {
-    return bmp.readPressure() * 0.00750062;
+  SensorsManager.add("humidity", []() {
+    return filterNan(dht.readHumidity());
   });
 }
