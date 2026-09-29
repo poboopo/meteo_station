@@ -29,7 +29,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 int temp = 0;
 int hum = 0;
 
-void addSensors();
+void setupSmt();
 void drawDisplay();
 
 long filterNan(float value) {
@@ -42,6 +42,9 @@ long filterNan(float value) {
 
 void setup() {
   dht.begin();
+  if (!dht.read()) {
+    LOGGER.error("main", "Failed to read data from sensor!");
+  }
 
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     LOGGER.error("main", "SSD1306 allocation failed");
@@ -49,7 +52,7 @@ void setup() {
   display.setTextSize(1);
   display.setTextColor(WHITE);
 
-  addSensors();
+  setupSmt();
 
   if (SmartThing.init("meteo_station")) {
     LOGGER.info("main", "SmartThing successfully initialized");
@@ -65,10 +68,6 @@ void setup() {
     display.print("Please wait :)");
     display.display();
   });
-
-  if (!dht.read()) {
-    LOGGER.error("main", "Failed to read data from sensor!");
-  }
 }
 
 void loop() {
@@ -108,11 +107,15 @@ void drawDisplay() {
   display.display();
 }
 
-void addSensors() {
+void setupSmt() {
   SensorsManager.add("temperature", []() {
     return temp;
   });
   SensorsManager.add("humidity", []() {
     return hum;
+  });
+  ActionsManager.add("led", "Turn led on/off", []() {
+      digitalWrite(LED_BUILTIN, digitalRead(LED_BUILTIN) == HIGH ? LOW : HIGH);
+      return true;
   });
 }
