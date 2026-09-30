@@ -9,7 +9,7 @@
 #define DHTTYPE DHT11  
 
 #define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 23
+#define SCREEN_HEIGHT 32
 #define OLED_RESET -1 // Reset pin
 #define SCREEN_ADDRESS 0x3C
 
@@ -17,10 +17,75 @@ const unsigned char wifi_icon [] PROGMEM = {
   0x3C, 0x42, 0x18, 0x24, 0x00, 0x18, 0x18, 0x00
 };
 const unsigned char temp_icon [] PROGMEM = {
-  0x18, 0x18, 0x18, 0x18, 0x3C, 0x7E, 0x7E, 0x3C
+  0x04, 0x00, //   *  
+  0x04, 0x00, //   *  
+  0x0A, 0x00, //  * * 
+  0x0A, 0x00, //  * * 
+  0x0A, 0x00, //  * * 
+  0x0E, 0x00, //  *** 
+  0x0E, 0x00, //  *** 
+  0x0E, 0x00, //  *** 
+  0x0E, 0x00, //  *** 
+  0x1F, 0x80, // *****
+  0x1B, 0x80, // ** **
+  0x1B, 0x80, // ** **
+  0x1F, 0x80, // *****
+  0x0E, 0x00, //  *** 
+  0x04, 0x00, //   *  
+  0x00, 0x00  //      
 };
 const unsigned char humid_icon [] PROGMEM = {
-  0x10, 0x38, 0x7C, 0xFE, 0xFE, 0xEE, 0x7C, 0x38
+  0x00, 0x00, //                 
+  0x01, 0x80, //        ##       
+  0x03, 0xC0, //       ####      
+  0x03, 0xC0, //       ####      
+  0x07, 0xE0, //      ######     
+  0x07, 0xE0, //      ######     
+  0x0F, 0xF0, //     ########    
+  0x0F, 0xF0, //     ########    
+  0x1F, 0xF8, //    ##########   
+  0x1F, 0xF8, //    ##########   
+  0x3F, 0xFC, //   ############  
+  0x3F, 0xFC, //   ############  
+  0x1F, 0xF8, //    ##########   
+  0x0F, 0xF0, //     ########    
+  0x07, 0xE0, //      ######     
+  0x00, 0x00  //
+};
+
+const unsigned char firmware_update[] PROGMEM = {
+  0x00, 0x00, //                 
+  0x03, 0xc0, //       ****      
+  0x03, 0xc0, //       ****      
+  0x03, 0xc0, //       ****      
+  0x03, 0xc0, //       ****      
+  0x03, 0xc0, //       ****      
+  0x03, 0xc0, //       ****      
+  0x0f, 0xf0, //     ********    
+  0x07, 0xe0, //      ******     
+  0x03, 0xc0, //       ****      
+  0x01, 0x80, //        **       
+  0x00, 0x00, //                 
+  0x00, 0x00, //                 
+  0x1f, 0xf8, //    **********   
+  0x10, 0x08, //    *        *   
+  0x10, 0x08, //    *        *   
+  0x10, 0x08, //    *        *   
+  0x17, 0xe8, //    * ****** *   
+  0x17, 0xe8, //    * ****** *   
+  0x17, 0xe8, //    * ****** *   
+  0x17, 0xe8, //    * ****** *   
+  0x17, 0xe8, //    * ****** *   
+  0x17, 0xe8, //    * ****** *   
+  0x17, 0xe8, //    * ****** *   
+  0x17, 0xe8, //    * ****** *   
+  0x10, 0x08, //    *        *   
+  0x10, 0x08, //    *        *   
+  0x1f, 0xf8, //    **********   
+  0x00, 0x00, //                 
+  0x00, 0x00, //                 
+  0x00, 0x00, //                 
+  0x00, 0x00  //  
 };
 
 DHT dht(D5, DHTTYPE);
@@ -49,8 +114,9 @@ void setup() {
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     LOGGER.error("main", "SSD1306 allocation failed");
   }
-  display.setTextSize(1);
+
   display.setTextColor(WHITE);
+  display.clearDisplay();
 
   setupSmt();
 
@@ -62,10 +128,22 @@ void setup() {
 
   ArduinoOTA.onStart([]() {
     display.clearDisplay();
-    display.setCursor(0, 0);
+    display.setTextSize(1);
+    display.drawBitmap(0, 0, firmware_update, 16, 32, WHITE);
+    display.setCursor(20, 7);
     display.print("Firmware update");
-    display.setCursor(0, 16);
+    display.setCursor(20, 17);
     display.print("Please wait :)");
+    display.display();
+  });
+  ArduinoOTA.onEnd([]() {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.drawBitmap(0, 0, firmware_update, 16, 32, WHITE);
+    display.setCursor(20, 7);
+    display.print("Update finished");
+    display.setCursor(20, 17);
+    display.print("Rebooting now");
     display.display();
   });
 }
@@ -84,22 +162,23 @@ void loop() {
 void drawDisplay() {
   display.clearDisplay();
 
-  display.drawBitmap(0, 0, temp_icon, 8, 8, WHITE);
-  display.setCursor(10, 0);
+  display.setTextSize(2);
+  display.drawBitmap(0, 0, temp_icon, 16, 16, WHITE);
+  display.setCursor(18, 0);
   display.print(temp);
   display.print("C");
 
-  display.drawBitmap(32, 0, humid_icon, 8, 8, WHITE);
-  display.setCursor(42, 0);
+  display.drawBitmap(70, 0, humid_icon, 16, 16, WHITE);
+  display.setCursor(90, 0);
   display.print(hum);
   display.print("%");
 
-  display.drawLine(0, 11, SCREEN_WIDTH, 11, WHITE);
-
-  display.drawBitmap(0, 16, wifi_icon, 8, 8, WHITE);
-  display.setCursor(10, 16);
+  display.setTextSize(1);
+  display.drawBitmap(8, 24, wifi_icon, 8, 8, WHITE);
+  display.setCursor(18, 24);
   if (SmartThing.wifiConnected()) {
     display.print(SmartThing.getIp());
+    digitalWrite(LED_BUILTIN, HIGH);
   } else {
     display.print("WiFi not connected");
   }
