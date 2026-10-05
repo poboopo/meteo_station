@@ -5,101 +5,32 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <ArduinoOTA.h>
+#include <Adafruit_BMP085.h>
 
-#define DHTTYPE DHT11  
+#include "icon.h"
+
+#define DHTTYPE DHT22
 
 #define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 32
+#define SCREEN_HEIGHT 64
 #define OLED_RESET -1 // Reset pin
 #define SCREEN_ADDRESS 0x3C
 
-const unsigned char wifi_icon [] PROGMEM = {
-  0x3C, 0x42, 0x18, 0x24, 0x00, 0x18, 0x18, 0x00
-};
-const unsigned char temp_icon [] PROGMEM = {
-  0x04, 0x00, //   *  
-  0x04, 0x00, //   *  
-  0x0A, 0x00, //  * * 
-  0x0A, 0x00, //  * * 
-  0x0A, 0x00, //  * * 
-  0x0E, 0x00, //  *** 
-  0x0E, 0x00, //  *** 
-  0x0E, 0x00, //  *** 
-  0x0E, 0x00, //  *** 
-  0x1F, 0x80, // *****
-  0x1B, 0x80, // ** **
-  0x1B, 0x80, // ** **
-  0x1F, 0x80, // *****
-  0x0E, 0x00, //  *** 
-  0x04, 0x00, //   *  
-  0x00, 0x00  //      
-};
-const unsigned char humid_icon [] PROGMEM = {
-  0x00, 0x00, //                 
-  0x01, 0x80, //        ##       
-  0x03, 0xC0, //       ####      
-  0x03, 0xC0, //       ####      
-  0x07, 0xE0, //      ######     
-  0x07, 0xE0, //      ######     
-  0x0F, 0xF0, //     ########    
-  0x0F, 0xF0, //     ########    
-  0x1F, 0xF8, //    ##########   
-  0x1F, 0xF8, //    ##########   
-  0x3F, 0xFC, //   ############  
-  0x3F, 0xFC, //   ############  
-  0x1F, 0xF8, //    ##########   
-  0x0F, 0xF0, //     ########    
-  0x07, 0xE0, //      ######     
-  0x00, 0x00  //
-};
-
-const unsigned char firmware_update[] PROGMEM = {
-  0x00, 0x00, //                 
-  0x03, 0xc0, //       ****      
-  0x03, 0xc0, //       ****      
-  0x03, 0xc0, //       ****      
-  0x03, 0xc0, //       ****      
-  0x03, 0xc0, //       ****      
-  0x03, 0xc0, //       ****      
-  0x0f, 0xf0, //     ********    
-  0x07, 0xe0, //      ******     
-  0x03, 0xc0, //       ****      
-  0x01, 0x80, //        **       
-  0x00, 0x00, //                 
-  0x00, 0x00, //                 
-  0x1f, 0xf8, //    **********   
-  0x10, 0x08, //    *        *   
-  0x10, 0x08, //    *        *   
-  0x10, 0x08, //    *        *   
-  0x17, 0xe8, //    * ****** *   
-  0x17, 0xe8, //    * ****** *   
-  0x17, 0xe8, //    * ****** *   
-  0x17, 0xe8, //    * ****** *   
-  0x17, 0xe8, //    * ****** *   
-  0x17, 0xe8, //    * ****** *   
-  0x17, 0xe8, //    * ****** *   
-  0x17, 0xe8, //    * ****** *   
-  0x10, 0x08, //    *        *   
-  0x10, 0x08, //    *        *   
-  0x1f, 0xf8, //    **********   
-  0x00, 0x00, //                 
-  0x00, 0x00, //                 
-  0x00, 0x00, //                 
-  0x00, 0x00  //  
-};
-
 DHT dht(D5, DHTTYPE);
+Adafruit_BMP085 bmp;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-int temp = 0;
+int dhtTemp = 0;
+int bmpTemp = 0;
 int hum = 0;
+int pressure = 0;
 
 void setupSmt();
 void drawDisplay();
 
-long filterNan(float value) {
+float filterNan(float value, int defaultValue) {
   if (isnan(value)) {
-    return 0;
+    return defaultValue;
   }
 
   return value;
@@ -109,6 +40,9 @@ void setup() {
   dht.begin();
   if (!dht.read()) {
     LOGGER.error("main", "Failed to read data from sensor!");
+  }
+  if (!bmp.begin()) {
+    LOGGER.error("main", "Failed to init bmp sensor");
   }
 
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
@@ -129,7 +63,7 @@ void setup() {
   ArduinoOTA.onStart([]() {
     display.clearDisplay();
     display.setTextSize(1);
-    display.drawBitmap(0, 0, firmware_update, 16, 32, WHITE);
+    display.drawBitmap(0, 0, firmware_update_icon_16_32, 16, 32, WHITE);
     display.setCursor(20, 7);
     display.print("Firmware update");
     display.setCursor(20, 17);
@@ -139,7 +73,7 @@ void setup() {
   ArduinoOTA.onEnd([]() {
     display.clearDisplay();
     display.setTextSize(1);
-    display.drawBitmap(0, 0, firmware_update, 16, 32, WHITE);
+    display.drawBitmap(0, 0, firmware_update_icon_16_32, 16, 32, WHITE);
     display.setCursor(20, 7);
     display.print("Update finished");
     display.setCursor(20, 17);
@@ -151,8 +85,10 @@ void setup() {
 void loop() {
   SmartThing.loop();
   
-  temp = filterNan(dht.readTemperature());
-  hum = filterNan(dht.readHumidity());
+  bmpTemp = bmp.readTemperature();
+  dhtTemp = filterNan(dht.readTemperature(), bmpTemp);
+  pressure = bmp.readPressure() * 0.00750063755419211; // мм рт. ст.
+  hum = filterNan(dht.readHumidity(), 0);
 
   drawDisplay();
 
@@ -163,19 +99,28 @@ void drawDisplay() {
   display.clearDisplay();
 
   display.setTextSize(2);
-  display.drawBitmap(0, 0, temp_icon, 16, 16, WHITE);
+  display.drawBitmap(0, 0, temp_icon_16_16, 16, 16, WHITE);
   display.setCursor(18, 0);
-  display.print(temp);
+  display.print(dhtTemp);
   display.print("C");
 
-  display.drawBitmap(70, 0, humid_icon, 16, 16, WHITE);
-  display.setCursor(90, 0);
+  display.drawBitmap(60, 0, humid_icon_16_16, 16, 16, WHITE);
+  display.setCursor(78, 0);
   display.print(hum);
   display.print("%");
 
-  display.setTextSize(1);
-  display.drawBitmap(8, 24, wifi_icon, 8, 8, WHITE);
+  display.drawBitmap(0, 24, temp_icon_16_16, 16, 16, WHITE);
   display.setCursor(18, 24);
+  display.print(bmpTemp);
+  display.print("C");
+
+  display.drawBitmap(60, 24, pressure_icon_16x16, 16, 16, WHITE);
+  display.setCursor(78, 24);
+  display.print(pressure);
+
+  display.setTextSize(1);
+  display.drawBitmap(8, 48, wifi_icon_8_8, 8, 8, WHITE);
+  display.setCursor(18, 48);
   if (SmartThing.wifiConnected()) {
     display.print(SmartThing.getIp());
     digitalWrite(LED_BUILTIN, HIGH);
@@ -187,11 +132,17 @@ void drawDisplay() {
 }
 
 void setupSmt() {
-  SensorsManager.add("temperature", []() {
-    return temp;
+  SensorsManager.add("dht_temperature", []() {
+    return dhtTemp;
   });
   SensorsManager.add("humidity", []() {
     return hum;
+  });
+  SensorsManager.add("bmp_temperature", []() {
+    return bmpTemp;
+  });
+  SensorsManager.add("pressure", []() {
+    return pressure;
   });
   ActionsManager.add("led", "Turn led on/off", []() {
       digitalWrite(LED_BUILTIN, digitalRead(LED_BUILTIN) == HIGH ? LOW : HIGH);
