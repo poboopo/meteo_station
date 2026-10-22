@@ -11,11 +11,11 @@
 #if defined OUTDOOR_METEO_STATION && OUTDOOR_METEO_STATION == 1
   #define ROOM_METEO_STATION 0
   #define DHTTYPE DHT22
-  #define DEVICE_TYPE "meteo_station"
+  #define DEVICE_TYPE "outdoor-meteo-station"
 #elif defined ROOM_METEO_STATION && ROOM_METEO_STATION == 1
   #define OUTDOOR_METEO_STATION 0
   #define DHTTYPE DHT11
-  #define DEVICE_TYPE "room_meteo_station"
+  #define DEVICE_TYPE "room-meteo-station"
 #endif
 
 #define SCREEN_WIDTH 128
@@ -36,10 +36,10 @@ int temperature = 0;
 int hum = 0;
 #if ROOM_METEO_STATION == 1
   int ppm = 0;
+  bool pressed = false;
+  bool displayEnabled = true;
 #endif
 
-bool pressed = false;
-bool displayEnabled = true;
 long lastUpdate = 0;
 bool showUpdate = true;
 
@@ -120,25 +120,28 @@ void setup() {
 void loop() {
   SmartThing.loop();
   
-  if (digitalRead(TOUCH_PIN)) {
-    if (!pressed) {
-      displayEnabled = !displayEnabled;
-      pressed = true;
+  #if ROOM_METEO_STATION == 1
+    if (digitalRead(TOUCH_PIN)) {
+      if (!pressed) {
+        displayEnabled = !displayEnabled;
+        pressed = true;
+      }
+    } else if (pressed) {
+      pressed = false;
     }
-  } else if (pressed) {
-    pressed = false;
-  }
+    if (displayEnabled) {
+      drawDisplay();
+    } else {
+      display.clearDisplay();
+      display.display();
+    }
+  #else
+    drawDisplay();
+  #endif
 
   if (millis() - lastUpdate > UPDATE_DELAY) {
     readSensors();
     lastUpdate = millis();
-  }
-
-  if (displayEnabled) {
-    drawDisplay();
-  } else {
-    display.clearDisplay();
-    display.display();
   }
 
   delay(150);
