@@ -25,8 +25,8 @@
 
 #define TOUCH_PIN D6
 #define AWAKE_TIME_MS 10000
-#define UPDATE_DELAY 10000
 
+#define UPDATE_DELAY_CONF "updateDelaySec"
 #define SHOW_UPDATE_CONF "showUpdate"
 
 DHT dht(D5, DHTTYPE);
@@ -40,6 +40,7 @@ int hum = 0;
   bool displayEnabled = true;
 #endif
 
+unsigned long updateDelay = 10000;
 long lastUpdate = 0;
 bool showUpdate = true;
 
@@ -60,6 +61,11 @@ void readSensors() {
   #if ROOM_METEO_STATION == 1
     ppm = (1023 - analogRead(A0)) * 100 / 1023;
   #endif
+}
+
+void loadConfig() {
+  updateDelay = abs(ConfigManager.getInt(UPDATE_DELAY_CONF, 10)) * 1000L;
+  showUpdate = ConfigManager.getBool(SHOW_UPDATE_CONF, true);
 }
 
 void setup() {
@@ -84,7 +90,6 @@ void setup() {
 
   if (SmartThing.init(DEVICE_TYPE)) {
     LOGGER.info("main", "SmartThing successfully initialized");
-    showUpdate = ConfigManager.getBool(SHOW_UPDATE_CONF, true);
   } else {
     LOGGER.error("main", "Failed to init SmartThing!");
   }
@@ -139,7 +144,7 @@ void loop() {
     drawDisplay();
   #endif
 
-  if (millis() - lastUpdate > UPDATE_DELAY) {
+  if (millis() - lastUpdate > updateDelay) {
     readSensors();
     lastUpdate = millis();
   }
@@ -161,7 +166,7 @@ void drawDisplay() {
   display.clearDisplay();
 
   if (showUpdate) {
-    int width = (millis() - lastUpdate) * 128 / UPDATE_DELAY;
+    int width = (millis() - lastUpdate) * 128 / updateDelay;
     display.fillRect(0, 0, width, 2, WHITE);
   }
 
@@ -203,8 +208,7 @@ void setupSmt() {
       return true;
   });
 
+  ConfigManager.add(UPDATE_DELAY_CONF);
   ConfigManager.add(SHOW_UPDATE_CONF);
-  ConfigManager.onConfigUpdate([]() {
-    showUpdate = ConfigManager.getBool(SHOW_UPDATE_CONF, true);
-  });
+  ConfigManager.onConfigUpdate(loadConfig);
 }
