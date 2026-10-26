@@ -203,11 +203,6 @@ void setupSmt() {
     });
   #endif
 
-  ActionsManager.add("led", "Turn led on/off", []() {
-      digitalWrite(LED_BUILTIN, digitalRead(LED_BUILTIN) == HIGH ? LOW : HIGH);
-      return true;
-  });
-
   ConfigManager.add(UPDATE_DELAY_CONF);
   ConfigManager.add(SHOW_UPDATE_CONF);
   ConfigManager.onConfigUpdate(loadConfig);
