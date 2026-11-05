@@ -32,10 +32,26 @@
 DHT dht(D5, DHTTYPE);
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-int temperature = 0;
-int hum = 0;
+struct sensor {
+  int value;
+  int oldValue;
+  char units;
+
+  void setValue(int v) {
+    if (abs(v - oldValue) > 2) {
+      oldValue = value;
+    }
+
+    value = v;
+  }
+};
+
+sensor temperature { 0, 0, 'C'};
+sensor humidity { 0, 0, '%'};
+
 #if ROOM_METEO_STATION == 1
-  int ppm = 0;
+  sensor ppm { 0, 0, '%'};
+
   bool pressed = false;
   bool displayEnabled = true;
 #endif
@@ -55,11 +71,11 @@ float filterNan(float value, int defaultValue) {
 }
 
 void readSensors() {
-  temperature = filterNan(dht.readTemperature(), 0);
-  hum = filterNan(dht.readHumidity(), 0);
+  temperature.setValue(filterNan(dht.readTemperature(), 0));
+  humidity.setValue(filterNan(dht.readHumidity(), 0));
 
   #if ROOM_METEO_STATION == 1
-    ppm = (1023 - analogRead(A0)) * 100 / 1023;
+    ppm.setValue((1023 - analogRead(A0)) * 100 / 1023);
   #endif
 }
 
@@ -152,14 +168,21 @@ void loop() {
   delay(150);
 }
 
-void drawSensor(uint16_t x, uint16_t y, const uint8_t *icon, int &value, char units) {
+void drawSensor(uint16_t x, uint16_t y, const uint8_t *icon, sensor &sen) {
   display.drawBitmap(x, y, icon, 18, 24, WHITE);
   display.setCursor(x + 18, y + 1);
   display.setTextSize(3);
-  display.print(value);
+  display.print(sen.value);
+
+  if (sen.value > sen.oldValue) {
+    display.drawBitmap(x + 54, y + 1, arrow_up_8x8, 8, 8, WHITE);
+  } else {
+    display.drawBitmap(x + 54, y + 1, arrow_down_8x8, 8, 8, WHITE);
+  }
+  
   display.setTextSize(1);
   display.setCursor(display.getCursorX(), y + 16);
-  display.print(units);
+  display.print(sen.units);
 }
 
 void drawDisplay() {
@@ -170,11 +193,11 @@ void drawDisplay() {
     display.fillRect(0, 0, width, 2, WHITE);
   }
 
-  drawSensor(0, 3, temp_icon_18_24, temperature, 'C');
-  drawSensor(64, 3, humid_icon_18_24, hum, '%');
+  drawSensor(0, 3, temp_icon_18_24, temperature);
+  drawSensor(64, 3, humid_icon_18_24, humidity);
 
   #if ROOM_METEO_STATION == 1
-    drawSensor(0, 28, air_icon_18_24, ppm, '%');
+    drawSensor(0, 28, air_icon_18_24, ppm);
   #endif
 
   display.drawBitmap(0, 54, wifi_icon_8_8, 8, 8, WHITE);
@@ -192,14 +215,14 @@ void drawDisplay() {
 
 void setupSmt() {
   SensorsManager.add("temperature", []() {
-    return temperature;
+    return temperature.value;
   });
   SensorsManager.add("humidity", []() {
-    return hum;
+    return humidity.value;
   });
   #if ROOM_METEO_STATION == 1
     SensorsManager.add("quality", []() {
-      return ppm;
+      return ppm.value;
     });
   #endif
 
